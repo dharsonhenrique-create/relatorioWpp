@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analisador de Relatórios - IA Gemini</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .loader { border-top-color: #3498db; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        html { scroll-behavior: smooth; }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen p-4 md:p-8 text-slate-900 font-sans">
+    <div class="max-w-5xl mx-auto bg-white p-6 md:p-10 rounded-3xl shadow-2xl border border-slate-100">
+        <header class="mb-10 border-b border-slate-100 pb-8 text-center md:text-left flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+                <h1 class="text-3xl md:text-4xl font-black text-slate-800 flex items-center justify-center md:justify-start gap-3">
+                    <span class="bg-blue-600 text-white p-2 rounded-xl text-3xl">🤖</span>
+                    Analista IA Premium
+                </h1>
+                <p class="text-slate-500 mt-3 text-lg">Resumos padronizados (Mensagens + Leads) via Gemini 2.5.</p>
+            </div>
+            <button onclick="resetForm()" class="text-slate-400 hover:text-red-500 transition-colors flex items-center gap-2 font-bold text-sm uppercase tracking-widest px-4 py-2 rounded-lg border border-slate-100 hover:border-red-100 hover:bg-red-50">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                Limpar Dados
+            </button>
+        </header>
+
+        <!-- Configurações -->
+        <section class="grid grid-cols-1 gap-8">
+            <div class="bg-slate-50 p-6 rounded-2xl border border-slate-200">
+                <label class="block text-sm font-bold text-slate-700 mb-2 uppercase tracking-wider">🔑 Chave da API do Gemini</label>
+                <input type="password" id="apiKey" 
+                    class="w-full p-4 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all shadow-sm" 
+                    placeholder="Insira sua chave API do Google AI Studio...">
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="group relative p-6 border-2 border-dashed border-slate-200 rounded-2xl bg-white hover:border-blue-400 hover:bg-blue-50/30 transition-all cursor-pointer">
+                    <label class="block text-sm font-bold text-slate-700 mb-3 uppercase tracking-wider">📅 Relatório da Semana</label>
+                    <input type="file" id="fileCurrent" accept=".csv" 
+                        class="w-full text-sm text-slate-500 file:mr-4 file:py-2.5 file:px-6 file:rounded-xl file:border-0 file:text-sm file:font-bold file:bg-blue-600 file:text-white hover:file:bg-blue-700 transition-all">
+                </div>
+
+                <div class="group relative p-6 border-2 border-dashed border-slate-200 rounded-2xl bg-white hover:border-emerald-400 hover:bg-emerald-50/30 transition-all cursor-pointer">
+                    <label class="block text-sm font-bold text-slate-700 mb-3 uppercase tracking-wider">🔙 Comparativo (Opcional)</label>
+                    <input type="file" id="filePrevious" accept=".csv" 
+                        class="w-full text-sm text-slate-500 file:mr-4 file:py-2.5 file:px-6 file:rounded-xl file:border-0 file:text-sm file:font-bold file:bg-emerald-600 file:text-white hover:file:bg-emerald-700 transition-all">
+                </div>
+            </div>
+
+            <button onclick="processData()" id="btnGenerate" 
+                class="group w-full bg-slate-900 text-white font-black py-5 rounded-2xl shadow-xl hover:bg-blue-600 active:scale-[0.99] transition-all flex items-center justify-center gap-3 text-lg text-center">
+                <span>GERAR RELATÓRIO PADRONIZADO</span>
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6" /></svg>
+            </button>
+        </section>
+
+        <!-- Loading -->
+        <div id="loading" class="hidden mt-12 text-center animate-pulse">
+            <div class="loader ease-linear rounded-full border-4 border-t-4 border-blue-600 h-16 w-16 mx-auto mb-4"></div>
+            <p class="text-slate-600 font-bold text-xl">Processando Dados Padronizados...</p>
+        </div>
+
+        <!-- Resultado -->
+        <div id="resultContainer" class="hidden mt-12 space-y-4 animate-in fade-in zoom-in duration-500">
+            <div class="flex items-center justify-between">
+                <h2 class="text-xl font-black text-slate-800 flex items-center gap-2">
+                    <span class="text-blue-600">●</span> Relatório Formatado
+                </h2>
+                <button onclick="copyToClipboard()" 
+                    class="bg-blue-50 text-blue-700 px-4 py-2 rounded-lg hover:bg-blue-100 transition-colors flex items-center gap-2 font-bold text-sm">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" /></svg>
+                    COPIAR
+                </button>
+            </div>
+            <textarea id="outputText" 
+                class="w-full h-[600px] p-6 border-2 border-slate-100 rounded-3xl bg-slate-50 text-slate-700 font-medium leading-relaxed focus:ring-0 focus:outline-none shadow-inner" 
+                readonly></textarea>
+        </div>
+    </div>
+
+    <script>
+        function resetForm() {
+            document.getElementById('fileCurrent').value = '';
+            document.getElementById('filePrevious').value = '';
+            document.getElementById('outputText').value = '';
+            document.getElementById('resultContainer').classList.add('hidden');
+            document.getElementById('loading').classList.add('hidden');
+            alert("Campos limpos com sucesso!");
+        }
+
+        async function processData() {
+            const apiKey = document.getElementById('apiKey').value;
+            const fileCurrent = document.getElementById('fileCurrent').files[0];
+            const filePrevious = document.getElementById('filePrevious').files[0];
+
+            if (!apiKey) return alert("Por favor, insira sua Chave API.");
+            if (!fileCurrent) return alert("Selecione o relatório atual.");
+
+            toggleLoading(true);
+
+            try {
+                const textCurrent = await readFileAsText(fileCurrent);
+                let textPrevious = "";
+                if (filePrevious) {
+                    textPrevious = await readFileAsText(filePrevious);
+                }
+
+                const prompt = `
+                Aja como um Gestor de Tráfego de Alta Performance. Sua tarefa é transformar os dados brutos de um CSV em um relatório padronizado para WhatsApp.
+
+                DADOS DO CSV ATUAL:
+                ${textCurrent}
+
+                ${textPrevious ? `DADOS DO CSV ANTERIOR: ${textPrevious}` : ''}
+
+                REGRAS DE OURO:
+                1. FOCO NO RESUMO GERAL: Some todos os valores para dar o total da conta. Não liste campanhas separadamente.
+                2. IDENTIFICAÇÃO DE RESULTADOS: Note que o CSV pode conter 'Conversas por mensagem iniciadas' E 'Leads (formulário)'. Você deve somar ambos separadamente.
+                3. PADRONIZAÇÃO RÍGIDA: Siga exatamente a estrutura abaixo.
+
+                ESTRUTURA DO RELATÓRIO (MANTENHA ESTA ORDEM):
+                
+                *Título:* 📊 *Relatório de Performance Semanal*
+                *Período:* [Extraia as datas de início e fim do CSV atual]
+
+                💰 *RESUMO DE INVESTIMENTO*
+                - *Valor Total Investido:* R$ [Soma total do valor usado]
+                - *Alcance:* [Soma total do alcance]
+                - *Impressões:* [Soma total de impressões]
+
+                📩 *ENGAJAMENTO E RESULTADOS*
+                - *Conversas Iniciadas:* [Soma de 'Conversas por mensagem iniciadas']
+                - *Novos Contatos:* [Soma de 'Novos contatos de mensagem']
+                - *Cadastros (Formulário):* [Soma de 'Leads (formulário)']
+                - *Contatos Repetidos:* [Soma de 'REPETIDOS'] (Explique brevemente que são pessoas que voltaram a entrar em contato através dos anúncios).
+
+                📉 *EFICIÊNCIA*
+                - *Custo por Resultado (Geral):* R$ [Investimento / (Conversas + Cadastros)]
+                - *Qualificação:* [% de novos contatos/cadastros em relação ao total de interações]
+
+                ${textPrevious ? `🔄 *COMPARATIVO COM SEMANA ANTERIOR*
+                - *Investimento:* [Variação %]
+                - *Volume de Resultados (Leads/Mensagens):* [Variação %]
+                - *Custo por Resultado:* [Variação %]
+                (Diga se a performance melhorou ou se precisamos de ajustes).` : ''}
+
+                🚀 *CONCLUSÃO ESTRATÉGICA*
+                [Gere uma única frase motivadora e analítica baseada nos números].
+
+                INSTRUÇÕES ADICIONAIS:
+                - Use emojis para cada métrica.
+                - Se não houver 'Leads (formulário)' no CSV, coloque como 0 ou ignore a linha se preferir, mas se houver, é obrigatório listar.
+                - Mantenha o texto limpo, sem parágrafos longos.
+                - Identifique o separador do CSV corretamente.
+                `;
+
+                const response = await callGemini(apiKey, prompt);
+                
+                document.getElementById('outputText').value = response;
+                document.getElementById('resultContainer').classList.remove('hidden');
+                document.getElementById('resultContainer').scrollIntoView({ behavior: 'smooth' });
+            } catch (error) {
+                alert("Erro ao processar dados: " + error.message);
+            } finally {
+                toggleLoading(false);
+            }
+        }
+
+        function readFileAsText(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (e) => resolve(e.target.result);
+                reader.onerror = () => reject(new Error("Não foi possível ler o arquivo CSV."));
+                reader.readAsText(file);
+            });
+        }
+
+        async function callGemini(key, prompt) {
+            const model = "gemini-2.5-flash-preview-09-2025";
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
+            
+            const payload = {
+                contents: [{ parts: [{ text: prompt }] }]
+            };
+
+            let retries = 5;
+            let delay = 1000;
+
+            for (let i = 0; i < retries; i++) {
+                try {
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.error?.message || "Erro desconhecido na API");
+                    }
+
+                    const json = await response.json();
+                    return json.candidates[0].content.parts[0].text;
+                } catch (error) {
+                    if (i === retries - 1) throw error;
+                    await new Promise(r => setTimeout(r, delay));
+                    delay *= 2;
+                }
+            }
+        }
+
+        function toggleLoading(show) {
+            document.getElementById('loading').classList.toggle('hidden', !show);
+            document.getElementById('btnGenerate').disabled = show;
+            document.getElementById('btnGenerate').classList.toggle('opacity-50', show);
+        }
+
+        function copyToClipboard() {
+            const copyText = document.getElementById("outputText");
+            copyText.select();
+            document.execCommand('copy');
+            alert("Relatório copiado!");
+        }
+    </script>
+</body>
+</html>
